@@ -1,0 +1,22 @@
+version: "3"
+
+services:
+  test:
+    image: quetzalarc/db-test
+    logging:
+      options:
+        max-file: "1"
+        max-size: "1m"
+    environment:
+      TZ: Asia/Jakarta
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: 
+      DB_DATABASE: test__database
+      DELAY: 1
+      COUNT: 5
+
+networks:
+  default:
+    name: dev
