@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	"github.com/kangata/db-test-go/database"
+	"github.com/kangata/db-test-go/helpers"
 )
 
 type Cache struct {
@@ -20,19 +20,46 @@ type Cache struct {
 }
 
 func main() {
-	db := database()
+	duration, _ := strconv.Atoi(helpers.Env("DURATION", "30"))
+	delay, _ := strconv.Atoi(helpers.Env("DELAY", "10"))
+	count, _ := strconv.Atoi(helpers.Env("COUNT", "5"))
+	lCount := 0
+
+	db := database.New()
 
 	db.AutoMigrate(Cache{})
 
-	delay, _ := strconv.Atoi(env("DELAY", "10"))
-	count, _ := strconv.Atoi(env("COUNT", "5"))
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
-	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	lastRow := Cache{}
 
-	fmt.Printf("delay: %d\n", delay)
-	fmt.Printf("count: %d\n", count)
+	r := db.Order("created_at DESC").First(&lastRow)
+
+	stopTime := time.Now().Add(time.Second * time.Duration(duration))
+
+	fmt.Printf("process start: %v\n", time.Now())
+	fmt.Printf("duration: %d second(s)\n", duration)
+	fmt.Printf("delay: %d second(s)\n", delay)
+	fmt.Printf("count: %d per second\n", count)
 
 	for delay > 0 {
+		if time.Since(stopTime) >= 0 {
+			fmt.Printf("process end: %v\n", time.Now())
+
+			rowCount := 0
+
+			if r.RowsAffected < 1 {
+				db.Raw("SELECT COUNT(*) FROM caches").Scan(&rowCount)
+			} else {
+				db.Raw("SELECT COUNT(*) FROM caches WHERE created_at > ?", lastRow.CreatedAt).Scan(&rowCount)
+			}
+
+			fmt.Printf("rows inserted: %d\n", rowCount)
+			fmt.Printf("looped count: %d\n", lCount)
+
+			os.Exit(0)
+		}
+
 		time.Sleep(time.Second)
 
 		delay -= 1
@@ -62,41 +89,13 @@ func main() {
 
 			if res.Error != nil {
 				fmt.Printf("Failed insert to database: %v\n", res.Error)
-			} else {
-				fmt.Println("Success insert to database")
 			}
 
 			count -= 1
 		}
 
-		delay, _ = strconv.Atoi(env("DELAY", "10"))
-		count, _ = strconv.Atoi(env("COUNT", "5"))
+		delay, _ = strconv.Atoi(helpers.Env("DELAY", "10"))
+		count, _ = strconv.Atoi(helpers.Env("COUNT", "5"))
+		lCount += 1
 	}
-}
-
-func env(key string, fallback string) string {
-	if val, ok := os.LookupEnv(key); ok {
-		return val
-	}
-
-	return fallback
-}
-
-func database() *gorm.DB {
-	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		env("DB_USERNAME", "root"),
-		env("DB_PASSWORD", "root"),
-		env("DB_HOST", "127.0.0.1"),
-		env("DB_PORT", "3306"),
-		env("DB_DATABASE", "test__database"),
-	)
-
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-
-	if err != nil {
-		panic(fmt.Sprintf("Cannot connect to database: %v", err))
-	}
-
-	return db
 }

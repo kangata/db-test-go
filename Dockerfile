@@ -8,6 +8,8 @@ RUN go build -o dbtest
 
 FROM alpine
 
+RUN apk add --no-cache tzdata
+
 COPY --from=builder /build/dbtest /bin/dbtest
 
 CMD ["/bin/dbtest"]
